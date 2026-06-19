@@ -23,6 +23,10 @@ export const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [filterDateRange, setFilterDateRange] = useState<string>('ALL');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+  
   const [filterType, setFilterType] = useState<string>('ALL');
   const [filterAccount, setFilterAccount] = useState<string>('ALL');
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
@@ -42,16 +46,26 @@ export const Dashboard: React.FC = () => {
       if (showLoading) setIsLoading(true);
       setError(null);
       
-      const [accountsRes, categoriesRes, transactionsRes] = await Promise.all([
+      const [accountsRes, categoriesRes, transactionsRes, authRes] = await Promise.all([
         api.get('/accounts'),
         api.get('/categories'),
-        api.get('/transactions')
+        api.get('/transactions'),
+        api.get('/auth/me').catch(() => null)
       ]);
       
-      // Extract array from standard response structures if necessary, fallback to data itself
-      setAccounts(Array.isArray(accountsRes.data) ? accountsRes.data : accountsRes.data.data || []);
+      const accs = Array.isArray(accountsRes.data) ? accountsRes.data : accountsRes.data.data || [];
+      setAccounts(accs);
       setCategories(Array.isArray(categoriesRes.data) ? categoriesRes.data : categoriesRes.data.data || []);
       setTransactions(Array.isArray(transactionsRes.data) ? transactionsRes.data : transactionsRes.data.data || []);
+
+      // Check Onboarding
+      if (authRes?.data) {
+        const user = authRes.data;
+        if (user.onboardingCompleted === false && accs.length === 0) {
+          navigate('/onboarding');
+          return;
+        }
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || 'Failed to load dashboard data.');
     } finally {
@@ -85,18 +99,56 @@ export const Dashboard: React.FC = () => {
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  const totalBalance = accounts.reduce((sum, acc) => sum + Number(acc.balance !== undefined ? acc.balance : acc.startingBalance), 0);
-  const totalIncoming = transactions.filter(t => t.type === 'INCOMING').reduce((sum, t) => sum + Number(t.amount), 0);
-  const totalOutgoing = transactions.filter(t => t.type === 'OUTGOING').reduce((sum, t) => sum + Number(t.amount), 0);
-  const netCashflow = totalIncoming - totalOutgoing;
+  const isFiltering = filterDateRange !== 'ALL' || filterType !== 'ALL' || filterAccount !== 'ALL' || filterCategory !== 'ALL' || searchQuery.trim() !== '';
 
   const filteredTransactions = transactions.filter(tx => {
+    // 1. Date Filter
+    const txDateStr = tx.transactionDate || tx.createdAt || tx.timestamp;
+    const txDate = new Date(txDateStr);
+    let matchDate = true;
+
+    if (filterDateRange !== 'ALL' && !isNaN(txDate.getTime())) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (filterDateRange === 'TODAY') {
+        matchDate = txDate >= today;
+      } else if (filterDateRange === 'THIS_WEEK') {
+        const firstDayOfWeek = new Date(today);
+        firstDayOfWeek.setDate(today.getDate() - today.getDay());
+        matchDate = txDate >= firstDayOfWeek;
+      } else if (filterDateRange === 'THIS_MONTH') {
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        matchDate = txDate >= firstDayOfMonth;
+      } else if (filterDateRange === 'CUSTOM') {
+        const start = customStartDate ? new Date(customStartDate) : null;
+        const end = customEndDate ? new Date(customEndDate) : null;
+        
+        if (start && end) {
+          end.setHours(23, 59, 59, 999);
+          matchDate = txDate >= start && txDate <= end;
+        } else if (start) {
+          matchDate = txDate >= start;
+        } else if (end) {
+          end.setHours(23, 59, 59, 999);
+          matchDate = txDate <= end;
+        }
+      }
+    }
+
+    // 2. Other Filters
     const matchType = filterType === 'ALL' || tx.type === filterType;
     const matchAccount = filterAccount === 'ALL' || tx.accountId === filterAccount;
     const matchCategory = filterCategory === 'ALL' || tx.categoryId === filterCategory;
     const matchSearch = !searchQuery.trim() || tx.reason.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchType && matchAccount && matchCategory && matchSearch;
+    
+    return matchDate && matchType && matchAccount && matchCategory && matchSearch;
   });
+
+  const totalBalance = accounts.reduce((sum, acc) => sum + Number(acc.balance !== undefined ? acc.balance : acc.startingBalance), 0);
+  const totalIncoming = filteredTransactions.filter(t => t.type === 'INCOMING').reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalOutgoing = filteredTransactions.filter(t => t.type === 'OUTGOING').reduce((sum, t) => sum + Number(t.amount), 0);
+  const netCashflow = totalIncoming - totalOutgoing;
 
   const getAccountName = (id: string) => accounts.find(a => a.id === id)?.name || id;
   const getCategoryName = (id: string) => categories.find(c => c.id === id)?.name || id;
@@ -202,7 +254,11 @@ export const Dashboard: React.FC = () => {
           <div className="space-y-8">
             
             {/* Summary Section */}
-            <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <h2 className="text-lg font-semibold mb-3">
+                {isFiltering ? 'Filtered Summary' : 'All-time Summary'}
+              </h2>
+              <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-white border border-notion-border rounded-xl shadow-sm p-5">
                 <p className="text-xs font-semibold text-notion-muted uppercase tracking-wider mb-1">Total Balance</p>
                 <p className="text-xl md:text-2xl font-bold text-notion-text">{formatCurrency(totalBalance)}</p>
@@ -222,6 +278,7 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
             </section>
+            </div>
 
             {/* Accounts Grid */}
             <section className="bg-white border border-notion-border rounded-xl shadow-sm p-6 md:p-8">
@@ -259,15 +316,28 @@ export const Dashboard: React.FC = () => {
                 </div>
                 
                 {/* Filters */}
-                <div className="flex flex-wrap items-center gap-3">
-                  <input
-                    type="text"
-                    placeholder="Search reason..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="px-3 py-1.5 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none w-full sm:w-auto min-w-[150px]"
-                  />
-                  <select
+                <div className="flex flex-col items-end gap-3">
+                  <div className="flex flex-wrap items-center gap-3 justify-end w-full">
+                    <select
+                      value={filterDateRange}
+                      onChange={(e) => setFilterDateRange(e.target.value)}
+                      className="px-3 py-1.5 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none"
+                    >
+                      <option value="ALL">All time</option>
+                      <option value="TODAY">Today</option>
+                      <option value="THIS_WEEK">This week</option>
+                      <option value="THIS_MONTH">This month</option>
+                      <option value="CUSTOM">Custom range</option>
+                    </select>
+
+                    <input
+                      type="text"
+                      placeholder="Search reason..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="px-3 py-1.5 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none w-full sm:w-auto min-w-[150px]"
+                    />
+                    <select
                     value={filterType}
                     onChange={(e) => setFilterType(e.target.value)}
                     className="px-3 py-1.5 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none"
@@ -296,6 +366,25 @@ export const Dashboard: React.FC = () => {
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
+                  </div>
+
+                  {filterDateRange === 'CUSTOM' && (
+                    <div className="flex items-center gap-2 animate-pop mt-2">
+                      <input
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        className="px-3 py-1.5 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none"
+                      />
+                      <span className="text-notion-muted text-sm">to</span>
+                      <input
+                        type="date"
+                        value={customEndDate}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                        className="px-3 py-1.5 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
               

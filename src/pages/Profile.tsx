@@ -16,12 +16,15 @@ interface Category {
 }
 
 export const Profile: React.FC = () => {
-  const userId = localStorage.getItem('userId') || 'Unknown User';
-  
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Profile State
+  const [userEmail, setUserEmail] = useState<string>('');
+  const [userName, setUserName] = useState<string>('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Add Account State
   const [isAdding, setIsAdding] = useState(false);
@@ -71,9 +74,20 @@ export const Profile: React.FC = () => {
     }
   };
 
+  const fetchProfile = async () => {
+    try {
+      const res = await api.get('/auth/me');
+      setUserEmail(res.data.email || '');
+      setUserName(res.data.name || '');
+    } catch (err: any) {
+      console.error('Failed to fetch profile', err);
+    }
+  };
+
   useEffect(() => {
     fetchAccounts();
     fetchCategories();
+    fetchProfile();
   }, []);
 
   const formatCurrency = (val: number | string | undefined) => {
@@ -88,6 +102,20 @@ export const Profile: React.FC = () => {
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(null), 4000);
+  };
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingProfile(true);
+    setError(null);
+    try {
+      await api.put('/auth/me', { name: userName.trim() });
+      showSuccess('Profile updated successfully.');
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Failed to update profile.');
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -252,16 +280,39 @@ export const Profile: React.FC = () => {
 
         {/* Basic Profile Info */}
         <section className="bg-white border border-notion-border rounded-xl shadow-sm p-6 md:p-8">
-          <h2 className="text-lg font-semibold mb-4">Account Information</h2>
-          <div className="space-y-4">
+          <h2 className="text-lg font-semibold mb-4">User Information</h2>
+          <form onSubmit={handleProfileSubmit} className="space-y-4 max-w-md">
             <div>
-              <p className="text-xs font-semibold text-notion-muted uppercase tracking-wider mb-1">User ID</p>
-              <p className="font-mono text-sm text-notion-text">{userId}</p>
+              <label className="block text-xs font-semibold text-notion-muted uppercase tracking-wider mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                value={userEmail}
+                readOnly
+                className="w-full px-3 py-2 text-sm bg-notion-hover border border-notion-border rounded-md text-notion-muted cursor-not-allowed outline-none"
+              />
             </div>
-            <div className="p-3 bg-notion-hover rounded text-sm text-notion-muted italic border border-notion-border/50">
-              Note: Basic profile editing (name, email password) will be added in a future update.
+            <div>
+              <label className="block text-xs font-semibold text-notion-muted uppercase tracking-wider mb-1">
+                Name
+              </label>
+              <input
+                type="text"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+                placeholder="Your Name"
+                className="w-full px-3 py-2 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none transition-colors"
+              />
             </div>
-          </div>
+            <button
+              type="submit"
+              disabled={isSavingProfile}
+              className="px-4 py-2 bg-notion-text text-white rounded-md text-sm font-medium hover:bg-opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {isSavingProfile ? 'Saving...' : 'Save Profile'}
+            </button>
+          </form>
         </section>
 
         {/* Bank Accounts Management */}

@@ -20,7 +20,7 @@ export const Register: React.FC = () => {
         const { token, userId } = response.data;
         localStorage.setItem('token', token);
         localStorage.setItem('userId', userId);
-        navigate('/dashboard');
+        navigate('/onboarding');
       } else {
         // Backend returned 200 but without a token (soft error)
         throw new Error(response.data?.message || 'Registration failed.');

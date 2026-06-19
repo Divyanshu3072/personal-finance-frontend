@@ -4,6 +4,7 @@ import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
 import { AddTransaction } from './pages/AddTransaction';
 import { Profile } from './pages/Profile';
+import { Onboarding } from './pages/Onboarding';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem('token');
@@ -49,6 +50,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Profile />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/onboarding" 
+          element={
+            <ProtectedRoute>
+              <Onboarding />
             </ProtectedRoute>
           } 
         />
