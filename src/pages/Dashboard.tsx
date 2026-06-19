@@ -28,6 +28,14 @@ export const Dashboard: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  const [editingTransaction, setEditingTransaction] = useState<any | null>(null);
+  const [editAmount, setEditAmount] = useState<string>('');
+  const [editReason, setEditReason] = useState<string>('');
+  const [editType, setEditType] = useState<string>('OUTGOING');
+  const [editAccount, setEditAccount] = useState<string>('');
+  const [editCategory, setEditCategory] = useState<string>('');
+  const [editError, setEditError] = useState<string | null>(null);
+
   const fetchDashboardData = async (showLoading = true) => {
     try {
       if (showLoading) setIsLoading(true);
@@ -84,6 +92,53 @@ export const Dashboard: React.FC = () => {
 
   const getAccountName = (id: string) => accounts.find(a => a.id === id)?.name || id;
   const getCategoryName = (id: string) => categories.find(c => c.id === id)?.name || id;
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this transaction? This will also update the related account balance.')) {
+      try {
+        await api.delete(`/transactions/${id}`);
+        fetchDashboardData(false);
+      } catch (err) {
+        console.error(err);
+        alert('Failed to delete transaction');
+      }
+    }
+  };
+
+  const openEditModal = (tx: any) => {
+    setEditingTransaction(tx);
+    setEditAmount(tx.amount.toString());
+    setEditReason(tx.reason);
+    setEditType(tx.type);
+    setEditAccount(tx.accountId);
+    setEditCategory(tx.categoryId);
+    setEditError(null);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditError(null);
+
+    if (!editReason.trim()) return setEditError('Reason cannot be empty');
+    const numericAmount = Number(editAmount);
+    if (isNaN(numericAmount) || numericAmount <= 0) return setEditError('Amount must be a positive number');
+    if (!editAccount || !editCategory) return setEditError('Account and Category must be selected');
+
+    try {
+      await api.put(`/transactions/${editingTransaction.id}`, {
+        amount: numericAmount,
+        reason: editReason,
+        type: editType,
+        accountId: editAccount,
+        categoryId: editCategory
+      });
+      setEditingTransaction(null);
+      fetchDashboardData(false);
+    } catch (err: any) {
+      console.error(err);
+      setEditError(err.response?.data?.error || 'Failed to update transaction');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-notion-bg font-sans text-notion-text p-4 md:p-8">
@@ -243,6 +298,7 @@ export const Dashboard: React.FC = () => {
                         <th className="py-3 px-4 font-normal">Account</th>
                         <th className="py-3 px-4 font-normal">Flow</th>
                         <th className="py-3 px-4 font-normal text-right">Amount</th>
+                        <th className="py-3 px-4 font-normal text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-notion-border">
@@ -269,6 +325,20 @@ export const Dashboard: React.FC = () => {
                           </td>
                           <td className={`py-3 px-4 text-right font-mono font-medium ${tx.type === 'INCOMING' ? 'text-green-600' : 'text-notion-text'}`}>
                             {tx.type === 'INCOMING' ? '+' : '-'}{formatCurrency(tx.amount)}
+                          </td>
+                          <td className="py-3 px-4 text-right text-xs">
+                            <button
+                              onClick={() => openEditModal(tx)}
+                              className="text-notion-muted hover:text-notion-text transition-colors px-2"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDelete(tx.id)}
+                              className="text-notion-muted hover:text-notion-tag-red-text transition-colors px-2"
+                            >
+                              Delete
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -297,6 +367,112 @@ export const Dashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Edit Modal Overlay */}
+      {editingTransaction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden border border-notion-border">
+            <div className="px-6 py-4 border-b border-notion-border flex justify-between items-center">
+              <h3 className="font-semibold text-notion-text">Edit Transaction</h3>
+              <button onClick={() => setEditingTransaction(null)} className="text-notion-muted hover:text-notion-text">
+                ✕
+              </button>
+            </div>
+            
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+              {editError && (
+                <div className="bg-notion-tag-red-bg text-notion-tag-red-text p-3 rounded text-sm font-medium border border-[#fdebeb]">
+                  {editError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-notion-muted mb-1">Type</label>
+                  <select
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value)}
+                    className="w-full px-3 py-2 bg-notion-bg border border-notion-border rounded focus:outline-none focus:border-notion-text text-sm"
+                  >
+                    <option value="OUTGOING">Outgoing (-)</option>
+                    <option value="INCOMING">Incoming (+)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-notion-muted mb-1">Amount (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    className="w-full px-3 py-2 bg-notion-bg border border-notion-border rounded focus:outline-none focus:border-notion-text text-sm font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-notion-muted mb-1">Reason</label>
+                <input
+                  type="text"
+                  required
+                  value={editReason}
+                  onChange={(e) => setEditReason(e.target.value)}
+                  placeholder="E.g., Groceries"
+                  className="w-full px-3 py-2 bg-notion-bg border border-notion-border rounded focus:outline-none focus:border-notion-text text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-notion-muted mb-1">Bank Account</label>
+                <select
+                  required
+                  value={editAccount}
+                  onChange={(e) => setEditAccount(e.target.value)}
+                  className="w-full px-3 py-2 bg-notion-bg border border-notion-border rounded focus:outline-none focus:border-notion-text text-sm"
+                >
+                  <option value="" disabled>Select account</option>
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-notion-muted mb-1">Category</label>
+                <select
+                  required
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  className="w-full px-3 py-2 bg-notion-bg border border-notion-border rounded focus:outline-none focus:border-notion-text text-sm"
+                >
+                  <option value="" disabled>Select category</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingTransaction(null)}
+                  className="flex-1 py-2 px-4 bg-white border border-notion-border rounded text-sm font-medium hover:bg-notion-hover transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 px-4 bg-notion-text text-white rounded text-sm font-medium hover:bg-opacity-90 transition-opacity"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
