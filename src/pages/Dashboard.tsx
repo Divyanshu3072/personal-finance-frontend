@@ -32,6 +32,7 @@ export const Dashboard: React.FC = () => {
   const [editAmount, setEditAmount] = useState<string>('');
   const [editReason, setEditReason] = useState<string>('');
   const [editType, setEditType] = useState<string>('OUTGOING');
+  const [editTransactionDate, setEditTransactionDate] = useState<string>('');
   const [editAccount, setEditAccount] = useState<string>('');
   const [editCategory, setEditCategory] = useState<string>('');
   const [editError, setEditError] = useState<string | null>(null);
@@ -77,6 +78,13 @@ export const Dashboard: React.FC = () => {
     });
   };
 
+  const formatDate = (dateString: string | undefined | null) => {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
   const totalBalance = accounts.reduce((sum, acc) => sum + Number(acc.balance !== undefined ? acc.balance : acc.startingBalance), 0);
   const totalIncoming = transactions.filter(t => t.type === 'INCOMING').reduce((sum, t) => sum + Number(t.amount), 0);
   const totalOutgoing = transactions.filter(t => t.type === 'OUTGOING').reduce((sum, t) => sum + Number(t.amount), 0);
@@ -110,6 +118,10 @@ export const Dashboard: React.FC = () => {
     setEditAmount(tx.amount.toString());
     setEditReason(tx.reason);
     setEditType(tx.type);
+    
+    const dateVal = tx.transactionDate || tx.createdAt || tx.timestamp;
+    setEditTransactionDate(dateVal ? new Date(dateVal).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+
     setEditAccount(tx.accountId);
     setEditCategory(tx.categoryId);
     setEditError(null);
@@ -130,7 +142,8 @@ export const Dashboard: React.FC = () => {
         reason: editReason,
         type: editType,
         accountId: editAccount,
-        categoryId: editCategory
+        categoryId: editCategory,
+        transactionDate: new Date(editTransactionDate).toISOString()
       });
       setEditingTransaction(null);
       fetchDashboardData(false);
@@ -305,7 +318,7 @@ export const Dashboard: React.FC = () => {
                       {filteredTransactions.map((tx: any) => (
                         <tr key={tx.id} className="hover:bg-notion-hover/50 transition-colors">
                           <td className="py-3 px-4 text-notion-muted">
-                            {new Date(tx.timestamp || tx.createdAt).toLocaleDateString()}
+                            {formatDate(tx.transactionDate || tx.createdAt || tx.timestamp)}
                           </td>
                           <td className="py-3 px-4 font-medium text-notion-text truncate max-w-[200px]">
                             {tx.reason}
@@ -410,6 +423,17 @@ export const Dashboard: React.FC = () => {
                     className="w-full px-3 py-2 bg-notion-bg border border-notion-border rounded focus:outline-none focus:border-notion-text text-sm font-mono"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-notion-muted mb-1">Date</label>
+                <input
+                  type="date"
+                  required
+                  value={editTransactionDate}
+                  onChange={(e) => setEditTransactionDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-notion-bg border border-notion-border rounded focus:outline-none focus:border-notion-text text-sm"
+                />
               </div>
 
               <div>

@@ -27,6 +27,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, cate
   const [reason, setReason] = useState<string>('');
   const [type, setType] = useState<'INCOMING' | 'OUTGOING'>('OUTGOING');
   const [categoryId, setCategoryId] = useState<string>('');
+  const [transactionDate, setTransactionDate] = useState<string>(new Date().toISOString().split('T')[0]);
   
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -62,7 +63,8 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, cate
         categoryId,
         amount: amountNum,
         reason: reason.trim(),
-        type
+        type,
+        transactionDate: new Date(transactionDate).toISOString()
       });
       
       setSuccess('Transaction added successfully!');
@@ -70,6 +72,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, cate
       setReason('');
       setCategoryId('');
       setAccountId('');
+      setTransactionDate(new Date().toISOString().split('T')[0]);
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || 'Failed to add transaction.');
     } finally {
@@ -199,6 +202,21 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, cate
             onChange={setCategoryId}
             onCreateCategory={handleCreateCategory}
             placeholder="Search or add category..."
+          />
+        </div>
+
+        {/* Transaction Date Input */}
+        <div>
+          <label htmlFor="transactionDate" className="block text-xs font-semibold text-notion-muted uppercase tracking-wider mb-2">
+            Date
+          </label>
+          <input
+            id="transactionDate"
+            type="date"
+            value={transactionDate}
+            onChange={(e) => setTransactionDate(e.target.value)}
+            className="w-full px-3 py-2 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none"
+            required
           />
         </div>
 
