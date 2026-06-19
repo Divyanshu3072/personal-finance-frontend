@@ -10,6 +10,11 @@ interface Account {
   balance?: string | number;
 }
 
+interface Category {
+  id: string;
+  name: string;
+}
+
 export const Profile: React.FC = () => {
   const userId = localStorage.getItem('userId') || 'Unknown User';
   
@@ -33,6 +38,26 @@ export const Profile: React.FC = () => {
   const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
+  // Category State
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isAddingCat, setIsAddingCat] = useState(false);
+  const [addCatName, setAddCatName] = useState('');
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  const [editCatName, setEditCatName] = useState('');
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+
+  const fetchCategories = async (showLoader = true) => {
+    try {
+      if (showLoader) setIsLoading(true);
+      const res = await api.get('/categories');
+      setCategories(Array.isArray(res.data) ? res.data : res.data.data || []);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Failed to fetch categories.');
+    } finally {
+      if (showLoader) setIsLoading(false);
+    }
+  };
+
   const fetchAccounts = async (showLoader = true) => {
     try {
       if (showLoader) setIsLoading(true);
@@ -48,6 +73,7 @@ export const Profile: React.FC = () => {
 
   useEffect(() => {
     fetchAccounts();
+    fetchCategories();
   }, []);
 
   const formatCurrency = (val: number | string | undefined) => {
@@ -109,6 +135,66 @@ export const Profile: React.FC = () => {
       await fetchAccounts(false);
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || 'Failed to update account.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addCatName.trim()) return;
+    
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await api.post('/categories', { name: addCatName.trim() });
+      setAddCatName('');
+      setIsAddingCat(false);
+      showSuccess('Category added successfully.');
+      await fetchCategories(false);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to add category.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditCatStart = (cat: Category) => {
+    setEditingCatId(cat.id);
+    setEditCatName(cat.name);
+  };
+
+  const handleEditCatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editCatName.trim() || !editingCatId) return;
+
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await api.put(`/categories/${editingCatId}`, { name: editCatName.trim() });
+      setEditingCatId(null);
+      showSuccess('Category updated successfully.');
+      await fetchCategories(false);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to update category.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteCatConfirm = async () => {
+    if (!deletingCategory) return;
+
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await api.delete(`/categories/${deletingCategory.id}`);
+      setDeletingCategory(null);
+      showSuccess('Category deleted successfully.');
+      await fetchCategories(false);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to delete category.');
+      setDeletingCategory(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -331,6 +417,128 @@ export const Profile: React.FC = () => {
           )}
         </section>
 
+        {/* Categories Management */}
+        <section className="bg-white border border-notion-border rounded-xl shadow-sm p-6 md:p-8">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-lg font-semibold">Categories</h2>
+              <p className="text-sm text-notion-muted mt-1">Manage your transaction categories.</p>
+            </div>
+            {!isAddingCat && (
+              <button
+                onClick={() => setIsAddingCat(true)}
+                className="flex items-center text-sm font-medium bg-notion-text text-white px-3 py-1.5 rounded hover:bg-opacity-90 transition-opacity"
+              >
+                <Plus className="w-4 h-4 mr-1.5" /> Add Category
+              </button>
+            )}
+          </div>
+
+          {isLoading ? (
+            <div className="flex items-center justify-center p-8">
+              <div className="w-6 h-6 border-2 border-notion-text border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              
+              {/* Add Category Form */}
+              {isAddingCat && (
+                <div className="border border-notion-border rounded-lg p-4 bg-notion-hover animate-pop">
+                  <h3 className="text-sm font-semibold mb-3">Add New Category</h3>
+                  <form onSubmit={handleAddCategory} className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="text"
+                      placeholder="Category Name"
+                      value={addCatName}
+                      onChange={(e) => setAddCatName(e.target.value)}
+                      className="flex-1 px-3 py-2 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none"
+                      required
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="px-4 py-2 bg-notion-text text-white rounded-md text-sm font-medium hover:bg-opacity-90 disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingCat(false)}
+                        className="px-3 py-2 border border-notion-border text-notion-muted rounded-md hover:bg-notion-border/50 text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* Categories List */}
+              {categories.length > 0 ? (
+                <div className="border border-notion-border rounded-lg overflow-hidden flex flex-wrap bg-notion-bg/50 p-2 gap-2">
+                  {categories.map((cat) => (
+                    <div key={cat.id} className="group relative flex items-center bg-white border border-notion-border rounded-md pl-3 pr-1 py-1.5 shadow-sm hover:border-notion-muted transition-colors">
+                      {editingCatId === cat.id ? (
+                        <form onSubmit={handleEditCatSubmit} className="flex items-center gap-2 animate-pop">
+                          <input
+                            type="text"
+                            value={editCatName}
+                            onChange={(e) => setEditCatName(e.target.value)}
+                            className="w-32 px-2 py-1 text-sm bg-notion-hover border border-notion-border rounded focus:border-notion-text outline-none"
+                            required
+                            autoFocus
+                          />
+                          <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="text-xs bg-notion-text text-white px-2 py-1 rounded hover:bg-opacity-90"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingCatId(null)}
+                            className="text-notion-muted hover:text-notion-text p-1"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </form>
+                      ) : (
+                        <>
+                          <span className="text-sm font-medium text-notion-text mr-3">{cat.name}</span>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleEditCatStart(cat)}
+                              className="p-1 text-notion-muted hover:text-notion-text hover:bg-notion-hover rounded"
+                              title="Edit Category"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => setDeletingCategory(cat)}
+                              className="p-1 text-notion-muted hover:text-red-600 hover:bg-red-50 rounded"
+                              title="Delete Category"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                !isAddingCat && (
+                  <div className="p-8 text-center bg-notion-hover border border-notion-border rounded-lg">
+                    <p className="text-sm text-notion-muted">You haven't added any categories yet.</p>
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </section>
+
       </div>
 
       {/* Strict Delete Confirmation Modal */}
@@ -378,6 +586,44 @@ export const Profile: React.FC = () => {
                 className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-red-300 transition-colors flex items-center"
               >
                 {isSubmitting ? 'Deleting...' : 'Permanently Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Category Modal */}
+      {deletingCategory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-notion-text/20 backdrop-blur-sm animate-pop">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border border-notion-border">
+            <div className="flex items-center text-notion-text mb-4">
+              <AlertTriangle className="w-6 h-6 mr-2 text-yellow-500" />
+              <h2 className="text-lg font-bold">Delete Category</h2>
+            </div>
+            
+            <p className="text-sm text-notion-text font-medium mb-2">
+              Are you sure you want to delete <span className="font-bold">"{deletingCategory.name}"</span>?
+            </p>
+            <p className="text-sm text-notion-muted mb-6 leading-relaxed">
+              If this category is used in any transactions, the deletion will be blocked by the server to protect your data.
+            </p>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setDeletingCategory(null)}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-medium border border-notion-border rounded-md hover:bg-notion-hover text-notion-text transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteCatConfirm}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-red-300 transition-colors flex items-center"
+              >
+                {isSubmitting ? 'Deleting...' : 'Delete Category'}
               </button>
             </div>
           </div>
