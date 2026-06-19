@@ -23,6 +23,11 @@ export const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [filterType, setFilterType] = useState<string>('ALL');
+  const [filterAccount, setFilterAccount] = useState<string>('ALL');
+  const [filterCategory, setFilterCategory] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
   const fetchDashboardData = async (showLoading = true) => {
     try {
       if (showLoading) setIsLoading(true);
@@ -63,6 +68,22 @@ export const Dashboard: React.FC = () => {
       maximumFractionDigits: 2
     });
   };
+
+  const totalBalance = accounts.reduce((sum, acc) => sum + Number(acc.balance !== undefined ? acc.balance : acc.startingBalance), 0);
+  const totalIncoming = transactions.filter(t => t.type === 'INCOMING').reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalOutgoing = transactions.filter(t => t.type === 'OUTGOING').reduce((sum, t) => sum + Number(t.amount), 0);
+  const netCashflow = totalIncoming - totalOutgoing;
+
+  const filteredTransactions = transactions.filter(tx => {
+    const matchType = filterType === 'ALL' || tx.type === filterType;
+    const matchAccount = filterAccount === 'ALL' || tx.accountId === filterAccount;
+    const matchCategory = filterCategory === 'ALL' || tx.categoryId === filterCategory;
+    const matchSearch = !searchQuery.trim() || tx.reason.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchType && matchAccount && matchCategory && matchSearch;
+  });
+
+  const getAccountName = (id: string) => accounts.find(a => a.id === id)?.name || id;
+  const getCategoryName = (id: string) => categories.find(c => c.id === id)?.name || id;
 
   return (
     <div className="min-h-screen bg-notion-bg font-sans text-notion-text p-4 md:p-8">
@@ -112,7 +133,29 @@ export const Dashboard: React.FC = () => {
         {!isLoading && !error && (
           <div className="space-y-8">
             
-            {/* Top Row: Accounts Grid */}
+            {/* Summary Section */}
+            <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white border border-notion-border rounded-xl shadow-sm p-5">
+                <p className="text-xs font-semibold text-notion-muted uppercase tracking-wider mb-1">Total Balance</p>
+                <p className="text-xl md:text-2xl font-bold text-notion-text">{formatCurrency(totalBalance)}</p>
+              </div>
+              <div className="bg-white border border-notion-border rounded-xl shadow-sm p-5">
+                <p className="text-xs font-semibold text-notion-muted uppercase tracking-wider mb-1">Total Incoming</p>
+                <p className="text-xl md:text-2xl font-bold text-notion-tag-green-text">{formatCurrency(totalIncoming)}</p>
+              </div>
+              <div className="bg-white border border-notion-border rounded-xl shadow-sm p-5">
+                <p className="text-xs font-semibold text-notion-muted uppercase tracking-wider mb-1">Total Outgoing</p>
+                <p className="text-xl md:text-2xl font-bold text-notion-tag-red-text">{formatCurrency(totalOutgoing)}</p>
+              </div>
+              <div className="bg-white border border-notion-border rounded-xl shadow-sm p-5">
+                <p className="text-xs font-semibold text-notion-muted uppercase tracking-wider mb-1">Net Cashflow</p>
+                <p className={`text-xl md:text-2xl font-bold ${netCashflow >= 0 ? 'text-notion-tag-green-text' : 'text-notion-tag-red-text'}`}>
+                  {netCashflow >= 0 ? '+' : ''}{formatCurrency(netCashflow)}
+                </p>
+              </div>
+            </section>
+
+            {/* Accounts Grid */}
             <section className="bg-white border border-notion-border rounded-xl shadow-sm p-6 md:p-8">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-lg font-semibold">Bank Accounts</h2>
@@ -139,81 +182,118 @@ export const Dashboard: React.FC = () => {
               )}
             </section>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Left Column: Categories Widget */}
-              <div className="bg-white border border-notion-border rounded-xl shadow-sm p-6 flex flex-col h-fit">
-                <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-lg font-semibold">Categories</h2>
-                  <span className="text-xs bg-notion-tag-gray-bg text-notion-text px-2 py-1 rounded font-medium">
-                    {categories.length} Total
-                  </span>
+            {/* Transactions Spreadsheet */}
+            <section className="bg-white border border-notion-border rounded-xl shadow-sm p-6 md:p-8 flex flex-col">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold">Transactions Overview</h2>
+                  <p className="text-sm text-notion-muted mt-1">Filter and review your complete transaction history.</p>
                 </div>
                 
-                {categories.length > 0 ? (
-                  <ul className="grid grid-cols-2 gap-y-3 gap-x-4">
-                    {categories.map(cat => (
-                      <li key={cat.id} className="flex items-center space-x-2 text-sm text-notion-muted hover:text-notion-text transition-colors">
-                        <div className="w-1.5 h-1.5 rounded-full bg-notion-text/40"></div>
-                        <span className="truncate">{cat.name}</span>
-                      </li>
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="text"
+                    placeholder="Search reason..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="px-3 py-1.5 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none w-full sm:w-auto min-w-[150px]"
+                  />
+                  <select
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                    className="px-3 py-1.5 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none"
+                  >
+                    <option value="ALL">All Types</option>
+                    <option value="INCOMING">Incoming</option>
+                    <option value="OUTGOING">Outgoing</option>
+                  </select>
+                  <select
+                    value={filterAccount}
+                    onChange={(e) => setFilterAccount(e.target.value)}
+                    className="px-3 py-1.5 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none max-w-[180px] truncate"
+                  >
+                    <option value="ALL">All Accounts</option>
+                    {accounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>{acc.name}</option>
                     ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-notion-muted italic bg-notion-hover p-4 rounded text-center mt-auto mb-auto">No categories found.</p>
-                )}
-              </div>
-
-              {/* Right Column: Recent Transactions Widget */}
-              <div className="bg-white border border-notion-border rounded-xl shadow-sm p-6 flex flex-col">
-                <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-lg font-semibold">Recent Transactions</h2>
-                  <span className="text-xs bg-notion-tag-gray-bg text-notion-text px-2 py-1 rounded font-medium">
-                    {transactions.length} Total
-                  </span>
+                  </select>
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="px-3 py-1.5 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none max-w-[180px] truncate"
+                  >
+                    <option value="ALL">All Categories</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
                 </div>
-                
-                {transactions.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                      <thead>
-                        <tr className="border-b border-notion-border text-notion-muted text-xs font-semibold">
-                          <th className="pb-2 pr-4 font-normal">Date</th>
-                          <th className="pb-2 pr-4 font-normal">Reason</th>
-                          <th className="pb-2 pr-4 font-normal text-right">Amount</th>
-                          <th className="pb-2 font-normal">Flow</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-notion-border">
-                        {transactions.slice(0, 10).map((tx: any) => (
-                          <tr key={tx.id} className="hover:bg-notion-hover transition-colors">
-                            <td className="py-2 pr-4 text-xs text-notion-muted">
-                              {new Date(tx.timestamp || tx.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="py-2 pr-4 font-medium text-notion-text">
-                              {tx.reason}
-                            </td>
-                            <td className={`py-2 pr-4 text-right font-mono ${tx.type === 'INCOMING' ? 'text-green-600' : 'text-notion-text'}`}>
-                              {tx.type === 'INCOMING' ? '+' : '-'}{formatCurrency(tx.amount)}
-                            </td>
-                            <td className="py-2 text-xs">
-                              {tx.type === 'INCOMING' ? (
-                                <span className="bg-notion-tag-green-bg text-notion-tag-green-text px-1.5 py-0.5 rounded">In</span>
-                              ) : (
-                                <span className="bg-notion-tag-red-bg text-notion-tag-red-text px-1.5 py-0.5 rounded">Out</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="text-sm text-notion-muted italic bg-notion-hover p-4 rounded text-center">No transactions yet.</p>
-                )}
               </div>
-            </div>
-
+              
+              {/* Table */}
+              {filteredTransactions.length > 0 ? (
+                <div className="overflow-x-auto rounded-lg border border-notion-border">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-notion-hover border-b border-notion-border">
+                      <tr className="text-notion-muted text-xs font-semibold tracking-wide uppercase">
+                        <th className="py-3 px-4 font-normal">Date</th>
+                        <th className="py-3 px-4 font-normal">Reason</th>
+                        <th className="py-3 px-4 font-normal">Category</th>
+                        <th className="py-3 px-4 font-normal">Account</th>
+                        <th className="py-3 px-4 font-normal">Flow</th>
+                        <th className="py-3 px-4 font-normal text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-notion-border">
+                      {filteredTransactions.map((tx: any) => (
+                        <tr key={tx.id} className="hover:bg-notion-hover/50 transition-colors">
+                          <td className="py-3 px-4 text-notion-muted">
+                            {new Date(tx.timestamp || tx.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="py-3 px-4 font-medium text-notion-text truncate max-w-[200px]">
+                            {tx.reason}
+                          </td>
+                          <td className="py-3 px-4 text-notion-text truncate max-w-[150px]">
+                            {getCategoryName(tx.categoryId)}
+                          </td>
+                          <td className="py-3 px-4 text-notion-muted truncate max-w-[150px]">
+                            {getAccountName(tx.accountId)}
+                          </td>
+                          <td className="py-3 px-4 text-xs">
+                            {tx.type === 'INCOMING' ? (
+                              <span className="bg-notion-tag-green-bg text-notion-tag-green-text px-1.5 py-0.5 rounded">In</span>
+                            ) : (
+                              <span className="bg-notion-tag-red-bg text-notion-tag-red-text px-1.5 py-0.5 rounded">Out</span>
+                            )}
+                          </td>
+                          <td className={`py-3 px-4 text-right font-mono font-medium ${tx.type === 'INCOMING' ? 'text-green-600' : 'text-notion-text'}`}>
+                            {tx.type === 'INCOMING' ? '+' : '-'}{formatCurrency(tx.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-12 text-center bg-notion-hover border border-notion-border rounded-lg flex flex-col items-center">
+                  <p className="text-sm text-notion-text font-medium mb-1">
+                    {transactions.length === 0 ? "No transactions yet." : "No transactions match your filters."}
+                  </p>
+                  <p className="text-sm text-notion-muted mb-4">
+                    {transactions.length === 0 ? "Add your first transaction to get started." : "Try clearing your filters or search query."}
+                  </p>
+                  {transactions.length === 0 && (
+                    <Link
+                      to="/transactions/new"
+                      className="text-sm font-medium bg-notion-text text-white px-4 py-2 rounded hover:bg-opacity-90 transition-opacity"
+                    >
+                      Add Transaction
+                    </Link>
+                  )}
+                </div>
+              )}
+            </section>
           </div>
         )}
       </div>
