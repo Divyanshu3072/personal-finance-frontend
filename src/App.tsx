@@ -3,6 +3,7 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
 import { AddTransaction } from './pages/AddTransaction';
+import { Profile } from './pages/Profile';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem('token');
@@ -40,6 +41,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AddTransaction />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/profile" 
+          element={
+            <ProtectedRoute>
+              <Profile />
             </ProtectedRoute>
           } 
         />

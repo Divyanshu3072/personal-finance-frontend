@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../api/axios';
-import { AccountForm } from '../components/AccountForm';
 
 interface Account {
   id: string;
@@ -72,7 +71,13 @@ export const Dashboard: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-notion-border">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3 md:space-x-4">
+            <Link
+              to="/profile"
+              className="text-sm font-medium text-notion-text hover:text-notion-muted transition-colors"
+            >
+              Profile
+            </Link>
             <Link
               to="/transactions/new"
               className="text-sm font-medium bg-notion-text text-white px-3 py-1.5 rounded hover:bg-opacity-90 transition-opacity"
@@ -105,43 +110,39 @@ export const Dashboard: React.FC = () => {
 
         {/* Dashboard Content */}
         {!isLoading && !error && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-8">
             
-            {/* Left Column: Accounts & Account Creation */}
-            <div className="space-y-6">
-              {/* Accounts Widget */}
-              <div className="bg-white border border-notion-border rounded p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-lg font-semibold">Accounts</h2>
-                  <span className="text-xs bg-notion-tag-gray-bg text-notion-text px-2 py-1 rounded font-medium">
-                    {accounts.length} Total
-                  </span>
-                </div>
-                
-                {accounts.length > 0 ? (
-                  <ul className="space-y-1">
-                    {accounts.map(acc => (
-                      <li key={acc.id} className="flex items-center justify-between py-2.5 border-b border-notion-border last:border-0 hover:bg-notion-hover px-2 -mx-2 rounded transition-colors cursor-default">
-                        <span className="font-medium text-sm truncate pr-4">{acc.name}</span>
-                        <span className="text-sm font-mono text-notion-muted">
-                          {formatCurrency(acc.balance !== undefined ? acc.balance : acc.startingBalance)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-notion-muted italic bg-notion-hover p-4 rounded text-center">No accounts found.</p>
-                )}
+            {/* Top Row: Accounts Grid */}
+            <section className="bg-white border border-notion-border rounded-xl shadow-sm p-6 md:p-8">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-semibold">Bank Accounts</h2>
+                <span className="text-xs bg-notion-tag-gray-bg text-notion-text px-2 py-1 rounded font-medium">
+                  {accounts.length} Total
+                </span>
               </div>
+              
+              {accounts.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {accounts.map(acc => (
+                    <div key={acc.id} className="border border-notion-border rounded-lg p-4 hover:border-notion-muted transition-colors bg-notion-bg/50">
+                      <h3 className="font-medium text-sm truncate text-notion-text mb-1">{acc.name}</h3>
+                      <p className="text-lg font-mono text-notion-text tracking-tight">
+                        {formatCurrency(acc.balance !== undefined ? acc.balance : acc.startingBalance)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-notion-muted italic bg-notion-hover p-4 rounded text-center">
+                  No accounts found. Go to Profile to add one.
+                </p>
+              )}
+            </section>
 
-              {/* Account Creation Form */}
-              <AccountForm onAccountCreated={() => fetchDashboardData(false)} />
-            </div>
-
-            {/* Right Column: Categories & Transactions Widget */}
-            <div className="space-y-6">
-              {/* Categories Widget */}
-              <div className="bg-white border border-notion-border rounded p-6 shadow-sm flex flex-col h-fit">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Left Column: Categories Widget */}
+              <div className="bg-white border border-notion-border rounded-xl shadow-sm p-6 flex flex-col h-fit">
                 <div className="flex items-center justify-between mb-5">
                   <h2 className="text-lg font-semibold">Categories</h2>
                   <span className="text-xs bg-notion-tag-gray-bg text-notion-text px-2 py-1 rounded font-medium">
@@ -163,8 +164,8 @@ export const Dashboard: React.FC = () => {
                 )}
               </div>
 
-              {/* Recent Transactions Widget */}
-              <div className="bg-white border border-notion-border rounded p-6 shadow-sm flex flex-col">
+              {/* Right Column: Recent Transactions Widget */}
+              <div className="bg-white border border-notion-border rounded-xl shadow-sm p-6 flex flex-col">
                 <div className="flex items-center justify-between mb-5">
                   <h2 className="text-lg font-semibold">Recent Transactions</h2>
                   <span className="text-xs bg-notion-tag-gray-bg text-notion-text px-2 py-1 rounded font-medium">
