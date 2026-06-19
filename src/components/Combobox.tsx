@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import type { Category } from '../context/AuthContext';
+export interface Category {
+  id: string;
+  name: string;
+}
 import { Search, Plus, Check, ChevronDown } from 'lucide-react';
 
 const COLORS = ['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'];
