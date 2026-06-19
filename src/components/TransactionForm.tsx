@@ -1,32 +1,48 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
+import api from '../api/axios';
 import { Combobox } from './Combobox';
-import { IndianRupee, ArrowLeft, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { IndianRupee, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 
-interface TransactionFormProps {
-  onSuccess: () => void;
+interface Account {
+  id: string;
+  name: string;
+  startingBalance: string | number;
 }
 
-export const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess }) => {
-  const { accounts, categories, addCategory, addTransaction } = useAuth();
-  
-  const [accountId, setAccountId] = useState<string>(accounts[0]?.id || '');
+interface Category {
+  id: string;
+  name: string;
+}
+
+interface TransactionFormProps {
+  accounts: Account[];
+  categories: Category[];
+  onRefreshCategories: () => void;
+}
+
+export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, categories, onRefreshCategories }) => {
+  const [accountId, setAccountId] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [reason, setReason] = useState<string>('');
   const [type, setType] = useState<'INCOMING' | 'OUTGOING'>('OUTGOING');
   const [categoryId, setCategoryId] = useState<string>('');
+  
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
 
     if (!accountId) {
-      setError('Please select a mock account.');
+      setError('Please select an account.');
       return;
     }
-    if (!amount || parseFloat(amount) <= 0) {
+    const amountNum = parseFloat(amount);
+    if (!amount || isNaN(amountNum) || amountNum <= 0) {
       setError('Please enter a valid numeric amount greater than 0.');
       return;
     }
@@ -35,60 +51,62 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess }) =
       return;
     }
     if (!categoryId) {
-      setError('Please select or create a category.');
+      setError('Please select a category.');
       return;
     }
 
     setLoading(true);
     try {
-      await addTransaction(
+      await api.post('/transactions', {
         accountId,
         categoryId,
-        parseFloat(amount),
-        reason.trim(),
+        amount: amountNum,
+        reason: reason.trim(),
         type
-      );
-      // Reset form and invoke success callback to return to dashboard
+      });
+      
+      setSuccess('Transaction added successfully!');
       setAmount('');
       setReason('');
       setCategoryId('');
-      onSuccess();
+      setAccountId('');
     } catch (err: any) {
-      setError(err.message || 'Failed to submit transaction.');
+      setError(err.response?.data?.message || err.message || 'Failed to add transaction.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleCreateCategory = async (name: string) => {
-    // Passes category creation down to global auth context
-    return await addCategory(name);
+    try {
+      const res = await api.post('/categories', { name });
+      onRefreshCategories();
+      const newCategoryId = res.data?.id || res.data?.data?.id;
+      if (newCategoryId) {
+        setCategoryId(newCategoryId);
+      }
+      return newCategoryId;
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Failed to create category.');
+      return null;
+    }
   };
 
   return (
-    <div className="w-full max-w-lg mx-auto bg-white border border-notion-border rounded-xl shadow-sm p-6 md:p-8 font-sans select-none animate-pop">
-      {/* Form Header */}
-      <div className="flex items-center space-x-3 mb-8">
-        <button
-          onClick={onSuccess}
-          className="p-1 hover:bg-notion-hover rounded cursor-pointer transition-colors duration-75 text-notion-muted hover:text-notion-text"
-          title="Back to Dashboard"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-notion-text">
-            Add Transaction
-          </h2>
-          <p className="text-xs text-notion-muted">
-            Log a new mock entry into your database ledger
-          </p>
-        </div>
-      </div>
-
+    <div className="w-full bg-white border border-notion-border rounded-xl shadow-sm p-6 md:p-8 font-sans select-none animate-pop">
+      
       {error && (
-        <div className="mb-6 p-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-md">
+        <div className="mb-6 p-3 text-sm text-notion-tag-red-text bg-notion-tag-red-bg border border-notion-tag-red-bg/25 rounded-md">
           {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="mb-6 p-3 text-sm text-notion-tag-green-text bg-notion-tag-green-bg border border-notion-tag-green-bg/25 rounded-md">
+          {success}
+          <div className="mt-2">
+            <Link to="/dashboard" className="underline font-medium hover:text-green-800">Back to Dashboard</Link>
+          </div>
         </div>
       )}
 
@@ -96,7 +114,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess }) =
         {/* Account Selector */}
         <div>
           <label htmlFor="account" className="block text-xs font-semibold text-notion-muted uppercase tracking-wider mb-2">
-            Target Account
+            Bank Account
           </label>
           <select
             id="account"
@@ -108,7 +126,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess }) =
             <option value="" disabled>Select an account</option>
             {accounts.map(acc => (
               <option key={acc.id} value={acc.id}>
-                {acc.name} (Starting: ₹{Number(acc.startingBalance).toFixed(2)})
+                {acc.name}
               </option>
             ))}
           </select>
@@ -173,14 +191,14 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess }) =
         {/* Category Combobox */}
         <div>
           <label className="block text-xs font-semibold text-notion-muted uppercase tracking-wider mb-2">
-            Category Tag
+            Category
           </label>
           <Combobox
             categories={categories}
             selectedCategoryId={categoryId}
             onChange={setCategoryId}
             onCreateCategory={handleCreateCategory}
-            placeholder="Search or select category..."
+            placeholder="Search or add category..."
           />
         </div>
 
@@ -192,7 +210,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess }) =
           <input
             id="reason"
             type="text"
-            placeholder="e.g. Weekly Groceries, AWS Hosting, Monthly Salary"
+            placeholder="e.g. Weekly Groceries, Monthly Salary"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             className="w-full px-3 py-2 text-sm bg-white border border-notion-border rounded-md focus:border-notion-text outline-none"
@@ -201,19 +219,12 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess }) =
           />
         </div>
 
-        {/* Submit Buttons */}
-        <div className="flex space-x-3 pt-4 border-t border-notion-border">
-          <button
-            type="button"
-            onClick={onSuccess}
-            className="w-1/3 py-2 px-4 border border-notion-border hover:bg-notion-hover text-notion-text rounded-md text-sm font-medium transition-colors duration-150 cursor-pointer"
-          >
-            Cancel
-          </button>
+        {/* Submit Button */}
+        <div className="pt-4 border-t border-notion-border">
           <button
             type="submit"
             disabled={loading}
-            className="w-2/3 py-2 px-4 bg-notion-text hover:bg-opacity-90 active:bg-opacity-100 text-white rounded-md text-sm font-medium transition-colors duration-150 flex items-center justify-center cursor-pointer disabled:opacity-50"
+            className="w-full py-2 px-4 bg-notion-text hover:bg-opacity-90 active:bg-opacity-100 text-white rounded-md text-sm font-medium transition-colors duration-150 flex items-center justify-center cursor-pointer disabled:opacity-50"
           >
             {loading ? (
               <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
